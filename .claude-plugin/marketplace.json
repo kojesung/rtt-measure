@@ -1,0 +1,11 @@
+{
+  "name": "rtt-measure",
+  "owner": { "name": "kojesung", "url": "https://github.com/kojesung" },
+  "plugins": [
+    {
+      "name": "rtt-measure",
+      "source": "./",
+      "description": "배포된 웹페이지의 첫 로딩을 패킷 단위로 실측해, 몇 kB를 줄이면 왕복(RTT)이 1번 줄어드는지 알려 주는 스킬"
+    }
+  ]
+}
