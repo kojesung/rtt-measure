@@ -27,6 +27,8 @@ Claude Code에서 만들었지만 [Agent Skills](https://agentskills.io) 형식�
 - 번들을 10kB, 50kB 줄여도 여전히 3 RTT입니다. **약 100kB를 줄여야** 2 RTT가 됩니다.
 - 반대로 **68.3kB까지는 늘어도** 3 RTT 그대로입니다.
 
+표의 각 열과 나머지 섹션(RTT가 아닌 대기, 측정 조건)을 읽는 방법은 [결과 읽는 법](docs/reading-results.md)에 정리했습니다. RTT, TCP, TLS를 몰라도 읽을 수 있게 썼습니다.
+
 ## 왜 RTT로 봐야 하나
 
 TCP 서버는 연결 직후 조금만 보내고, 받았다는 응답(ACK)이 돌아올 때마다 한 번에 보내는 양을 약 2배씩 늘립니다(슬로 스타트). 교과서 값(세그먼트 1,460B, 처음에 10개)으로 계산하면 이렇습니다.
@@ -158,6 +160,7 @@ skills/rtt-measure/
   scripts/analyze.py  캡처에서 RTT, MSS, 라운드, 대기를 추출
   scripts/budget.py   회차를 모아 RTT 예산 표를 계산
 tests/                합성 캡처와 실측 라운드 값으로 판정 규칙 확인
+docs/reading-results.md  결과 표 읽는 법
 docs/verification.md  검증 기록
 .claude-plugin/       Claude Code 플러그인·마켓플레이스 설정
 ```
