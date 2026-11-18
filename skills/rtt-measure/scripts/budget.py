@@ -245,7 +245,7 @@ def report(cal, what_if, target=None):
         if s['paced_runs']:
             notes.append(f"{i}단계: {s['paced_runs']}/{s['runs']}회에서 서버가 고르게 나눠 보내(페이싱) 라운드 사이 공백이 없었습니다. RTT 창마다 세그먼트 수가 계속 늘어 슬로 스타트로 보고, 창 하나를 1 RTT로 셌습니다. 증가율은 창 크기로 추정한 값입니다.")
         if s['overlap_runs']:
-            notes.append(f"{i}단계: {s['overlap_runs']}/{s['runs']}회에서 HTML을 다 받기 전에 요청이 나갔습니다(early flush). HTML 나머지가 이 단계와 cwnd를 나눠 써서 이 단계 전송량에 포함됩니다.")
+            notes.append(f"{i}단계: {s['overlap_runs']}/{s['runs']}회에서 HTML을 다 받기 전에 요청이 나갔습니다(early flush). 서버가 이 요청을 받기 전에 보낸 HTML은 앞 단계로 셌고, 받은 뒤에 보낸 HTML이 있으면 이 단계와 cwnd를 나눠 써서 이 단계 전송량에 포함됩니다.")
     out.append('')
     upto = f'{target}단계까지' if target else '전체 단계'
     total = '대역폭 제한 구간이 있어 RTT로 합산 불가' if total_rtt is None else (f'{total_rtt}~{total_hi}' if total_hi != total_rtt else f'{total_rtt}')

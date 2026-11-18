@@ -395,13 +395,35 @@ def analyze(path, host=None, server_ip=None, client_port=None, window=None):
         else:
             stage_groups.append(dict(g, overlaps_previous=bool(in_flight)))
 
+    # 서버 데이터를 단계에 나눈다. 기본은 도착 시각(그 단계 요청 이후 도착)이지만, 요청 후 최소 RTT보다 빨리 도착했고
+    # TSecr도 요청 TSval보다 앞이면 서버가 그 요청을 받기 전에 보낸 앞 단계 응답이다(요청에 대한 응답은 최소 1 RTT 뒤에 온다).
+    # early flush에서 브라우저가 HTML 일부를 받자마자 요청하면, 서버가 이미 보낸 HTML 나머지가 요청 직후 도착한다
+    # (poudy.site 실측 5/5회, 20세그먼트가 요청 후 2~5ms, RTT 5~7ms). 이걸 다음 단계로 세면 없는 라운드가 하나 생긴다.
+    # TSecr만으로는 판정하지 않는다: 서버는 아직 ACK하지 않은 작은 패킷이 앞에 있으면 TSecr을 늦게 갱신한다(RFC 7323).
+    # 블로그 개선 후 캡처: 요청 후 11ms(RTT 7ms)에 온 응답이 요청 19ms 전 패킷의 TSval을 담고 있었다.
+    ctsval = {ts: tcp_options(tp).get('tsval') for ts, d, tp in pkts if d == 'c2s' and tp.plen > 0}
+    req_tsval = [ctsval.get(g['start']) for g in stage_groups]
+    stage_segs = [[] for _ in stage_groups]
+    for ts, n in resp:
+        i = next((k for k in range(len(stage_groups) - 1, -1, -1) if stage_groups[k]['start'] < ts), None)
+        if i is None:
+            continue
+        echo = sdata.get(ts, (None, None))[1]
+        while ts_opt and i > 0 and ts - stage_groups[i]['start'] < rtt and echo is not None \
+                and req_tsval[i] is not None and seq_after(req_tsval[i], echo):
+            i -= 1
+        stage_segs[i].append((ts, n))
+    if ts_opt:   # early flush 판정도 같은 기준으로: 앞 단계 응답이 이 단계 요청 뒤까지 도착
+        for i in range(1, len(stage_groups)):
+            stage_groups[i]['overlaps_previous'] = bool(stage_segs[i - 1]) and stage_segs[i - 1][-1][0] > stage_groups[i]['start']
+
     rtt = data_rtt or handshake_rtt
     rtt_ms = rtt * 1000
     # 1차: 단계마다 라운드 후보를 나누고 서버 유휴 시간을 잰다
     pre = []
     for i, g in enumerate(stage_groups):
         end = stage_groups[i + 1]['start'] if i + 1 < len(stage_groups) else float('inf')
-        segs = [(ts, n) for ts, n in resp if g['start'] < ts < end]
+        segs = stage_segs[i]
         use_ack = bool(ts_opt) and bool(segs) and all(sdata.get(ts, (None, None))[1] is not None for ts, _ in segs)
         if use_ack:
             raw = ack_rounds([(ts, n, *sdata[ts], k) for k, (ts, n) in enumerate(segs)], cacks)
@@ -444,7 +466,7 @@ def analyze(path, host=None, server_ip=None, client_port=None, window=None):
         if not tail and len(full) >= 2 and full[0] > 0 and full[-1] > full[0]:
             growth_samples.append((full[-1] / full[0]) ** (1 / (len(full) - 1)))
         last_server = segs[-1][0] if segs else g['start']
-        next_req_gap = (end - last_server) * 1000 if end != float('inf') else None
+        next_req_gap = max(0.0, (end - last_server) * 1000) if end != float('inf') else None   # 겹치면(early flush) 대기 0
         stages.append({
             'index': i + 1,
             'request_count': g['count'] + g.get('mid_requests', 0),
