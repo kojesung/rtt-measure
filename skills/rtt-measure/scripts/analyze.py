@@ -397,8 +397,8 @@ def analyze(path, host=None, server_ip=None, client_port=None, window=None):
 
     # 서버 데이터를 단계에 나눈다. 기본은 도착 시각(그 단계 요청 이후 도착)이지만, 요청 후 최소 RTT보다 빨리 도착했고
     # TSecr도 요청 TSval보다 앞이면 서버가 그 요청을 받기 전에 보낸 앞 단계 응답이다(요청에 대한 응답은 최소 1 RTT 뒤에 온다).
-    # early flush에서 브라우저가 HTML 일부를 받자마자 요청하면, 서버가 이미 보낸 HTML 나머지가 요청 직후 도착한다
-    # (poudy.site 실측 5/5회, 20세그먼트가 요청 후 2~5ms, RTT 5~7ms). 이걸 다음 단계로 세면 없는 라운드가 하나 생긴다.
+    # 브라우저가 HTML 첫 라운드를 받자마자 요청하면, 서버가 슬로 스타트 다음 라운드로 이미 보낸 HTML 나머지가 요청 직후
+    # 도착한다(poudy.site 실측 5/5회: HTML 10 → 20세그먼트, 20세그먼트가 요청 후 2~5ms, RTT 5~7ms). 이걸 다음 단계로 세면 없는 라운드가 하나 생긴다.
     # TSecr만으로는 판정하지 않는다: 서버는 아직 ACK하지 않은 작은 패킷이 앞에 있으면 TSecr을 늦게 갱신한다(RFC 7323).
     # 블로그 개선 후 캡처: 요청 후 11ms(RTT 7ms)에 온 응답이 요청 19ms 전 패킷의 TSval을 담고 있었다.
     ctsval = {ts: tcp_options(tp).get('tsval') for ts, d, tp in pkts if d == 'c2s' and tp.plen > 0}

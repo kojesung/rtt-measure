@@ -79,7 +79,7 @@ for j in rtt-runs/run-*.json; do … scripts/analyze.py rtt-runs/capture.pcap --
    - 초기 cwnd 하한은 같은 호스트의 모든 회차에서 관측한 최댓값을 공유해 라운드를 다시 합친다(초기 cwnd는 서버 설정이라 연결마다 같다). 회차 하나만으로는 증거가 부족해 하한이 낮게 잡힐 수 있기 때문이다.
    - 회차 간 일관성(라운드 수 차이, 첫 라운드와 RTT의 비례).
 3. **대역폭 제한**: `bandwidth_limited`인 단계는 RTT로 세지 않는다. 근거로 `per_rtt_window`가 평평해진 구간을 함께 적는다.
-4. **early flush**: `overlaps_previous`가 참인 단계는 서버가 HTML 앞부분을 먼저 보내고 브라우저가 HTML이 끝나기 전에 하위 리소스를 요청한 것이다. 서버가 그 요청을 받기 전에 보낸 HTML(요청 후 최소 RTT 안에 도착)은 analyze.py가 1단계로 센다. 그래서 1단계 전송량이 HTML 크기(`html_encoded_bytes`)보다 작게 남아 있으면, 서버가 요청을 받은 뒤에 보낸 HTML이 2단계 전송량에 섞여 있다고 보고에 적는다.
+4. **early flush**: `overlaps_previous`가 참인 단계는 브라우저가 HTML을 다 받기 전에 하위 리소스를 요청한 것이다(HTML이 초기 cwnd보다 커서 여러 라운드로 오거나, 서버가 앞부분을 먼저 보낸 경우). 서버가 그 요청을 받기 전에 보낸 HTML(요청 후 최소 RTT 안에 도착)은 analyze.py가 1단계로 센다. 그래서 1단계 전송량이 HTML 크기(`html_encoded_bytes`)보다 작게 남아 있으면, 서버가 요청을 받은 뒤에 보낸 HTML이 2단계 전송량에 섞여 있다고 보고에 적는다.
 
 ### 6. 예산 계산
 ```bash
