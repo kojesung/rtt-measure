@@ -5,3 +5,6 @@ __pycache__/
 venv/
 *.pcap
 rtt-runs/
+
+# 로컬 검증용 캡처·분석 결과 (커밋하지 않음)
+local-data/

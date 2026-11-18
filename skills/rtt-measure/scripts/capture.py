@@ -185,7 +185,9 @@ def main():
         }
         json.dump(meta, open(os.path.join(a.out, f'run-{n}.json'), 'w'), ensure_ascii=False, indent=2)
         print(f"[{n}/{a.runs}] protocol={protocols} 명시 리소스 {len(declared)}개")
-        if any(p not in ('h2', 'http/1.1') for p in protocols):
+        # HTTP/3(QUIC)은 TCP가 아니고, HTTP/1.1은 브라우저가 연결을 여러 개(보통 6개) 열어 리소스를 나눠 받으므로
+        # 연결 하나의 라운드로 세는 분석이 맞지 않는다(rilog.kr 실측: 고른 연결이 HTML 다음 명시되지 않은 2MB 폰트만 실음).
+        if any(p != 'h2' for p in protocols):
             print('  ! HTTP/2가 아닌 프로토콜이 섞였습니다. 이 회차는 분석에서 빼세요.')
         time.sleep(1.0)  # 회차 사이 간격: 수동 캡처 파일에서 회차가 겹치지 않게
 
