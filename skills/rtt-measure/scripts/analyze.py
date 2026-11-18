@@ -310,7 +310,8 @@ def pick_flow(flows, host, server_ip, client_port=None):
         cands.append((f['pkts'][0][0], -server_bytes, f))
     if not cands:
         return None, 0
-    # 브라우저는 같은 호스트에 연결을 2개 열기도 한다(credential 유무가 다른 요청용).
+    # 브라우저는 같은 호스트에 연결을 2개 동시에 열고 한쪽만 쓰기도 한다. 블로그 개선 후 캡처: SYN이 0.3ms 빠른 연결이
+    # TLS handshake만 하고 HTTP 요청 없이 닫혔다. 그래서 먼저 열린 연결이 아니라
     # 리소스 대부분을 실어 나른 연결 = 서버가 가장 많이 보낸 연결을 고른다.
     cands.sort(key=lambda x: (x[1], x[0]))
     return cands[0][2], [{'client_port': c[2]['cport'], 'server_bytes': -c[1]} for c in cands]
