@@ -1,5 +1,6 @@
 """budget.py 보고 규칙을 합성 analysis.json으로 확인한다.
   1) 총 RTT는 단계별 최빈값의 합이 아니라 회차별 합의 범위·분포
+  2) 회차별 라운드가 N과 N+1로 갈리면 범위로 내고, 모델 여유와 실측 "N으로 고정하려면"을 함께 낸다
 """
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'skills', 'rtt-measure', 'scripts'))
@@ -50,5 +51,43 @@ check('한 회차에서 두 단계가 함께 늘어남', '6~8 (6: 3회, 8: 1회)
 runs = [run(k, [[5], [60, 120, 200]]) for k in range(1, 4)]
 line = total_line(budget(runs))
 check('모든 회차가 같음', line.endswith(': 6**'), line)
+
+
+def stage_row(text, i):
+    return next(l for l in text.splitlines() if l.startswith(f'| {i} '))
+
+
+def note(text, i):
+    return next((l for l in text.splitlines() if l.startswith(f'- {i}단계: 회차별 라운드가')), '')
+
+
+# 2) 핫스팟 실측과 같은 모양: 3 RTT 5회, 4 RTT 4회. 4 RTT 회차는 증가가 2배에 크게 못 미쳐(58 → 78) 마지막 라운드가 큼
+runs = [run(k, [[5], [60, 123, 222]]) for k in range(1, 6)] + [run(k, [[5], [58, 78, 128, 141]]) for k in range(6, 10)]
+text = budget(runs)
+check('갈린 단계는 범위로 표시', '| 3~4 (' in stage_row(text, 2), stage_row(text, 2))
+n = note(text, 2)
+check('분포를 적음', '3 RTT(5회)와 4 RTT(4회)' in n, n)
+check('실측 마지막 라운드로 고정 감소량', '최소 −172.0kB' in n, n)        # 141 × 1238 / 1.015
+check('모델이 N이면 여유를 함께', '3 라운드 한계까지 18.3kB 여유' in n, n)  # 420 − 405 = 15세그먼트
+check('총합도 회차별', '6~7 (6: 5회, 7: 4회)' in total_line(text), total_line(text))
+
+# 크기가 경계에 걸친 경우: 4 RTT 회차가 마지막 라운드에 2세그먼트만 보냄 → 실측 감소량도 작음
+runs = [run(k, [[5], [60, 120, 225]]) for k in range(1, 4)] + [run(k, [[5], [60, 118, 225, 2]]) for k in range(4, 6)]
+n = note(budget(runs), 2)
+check('경계: 실측 감소량이 작음', '최소 −2.4kB' in n, n)
+
+# 모델이 N+1이면 모델 기준 감소량을 적는다
+runs = [run(k, [[5], [60, 125, 245]]) for k in range(1, 4)] + [run(k, [[5], [60, 120, 240, 10]]) for k in range(4, 6)]
+n = note(budget(runs), 2)
+check('모델이 N+1이면 모델 감소량', '모델(시작 cwnd에서 라운드마다 2배)로는 4 라운드' in n and '이면 3 RTT가 됩니다' in n, n)
+
+# 모델이 N도 N+1도 아니면 경계라고 하지 않는다
+runs = [run(k, [[5], [150, 100, 50]]) for k in range(1, 4)] + [run(k, [[5], [150, 100, 40, 10]]) for k in range(4, 6)]
+n = note(budget(runs), 2)
+check('모델이 맞지 않으면 경계 판단 안 함', '판단하지 않고' in n and '경계에 걸쳐 있다는 뜻' not in n, n)
+
+# 2 이상 차이 나면 지금처럼 판정 불가
+runs = [run(k, [[5], [60, 120, 200]]) for k in range(1, 4)] + [run(4, [[5], [30, 40, 60, 100, 150]])]
+check('2 이상 차이는 판정 불가', '판정 불가' in stage_row(budget(runs), 2), stage_row(budget(runs), 2))
 
 sys.exit(1 if fail else 0)

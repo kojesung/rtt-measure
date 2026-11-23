@@ -84,6 +84,7 @@ def calibrate(runs):
             'runs': len(per),
             'observed_rounds': observed,                       # 회차별로 실제 센 라운드 수
             'run_rounds': {k: len(runs[k]['stages'][i]['round_segments']) for k in ok},   # 회차 번호 → 라운드 수 (총합을 회차별로 더할 때)
+            'run_last_round': {k: runs[k]['stages'][i]['round_segments'][-1] for k in ok},  # 회차 번호 → 마지막 라운드 세그먼트 수
             'rate_like': rate_like(firsts),
             'segments_median': statistics.median(s['segments'] for s in per),
             'rounds_mode': mode([len(s['round_segments']) for s in per]),
@@ -193,6 +194,29 @@ def total_text(per_run):
     return txt + (f' · 대역폭 제한 등으로 {excluded}회 제외' if excluded else '')
 
 
+def split_note(i, s, p, payload, head):
+    """회차별 라운드가 N과 N+1로 갈린 단계. 경계 여부를 기준 숫자로 판정하지 않고 두 값을 나란히 낸다.
+    - 모델 값: 시작 cwnd에서 라운드마다 2배일 때 N 라운드 한계까지의 거리
+    - 실측 값: N+1이 나온 회차가 마지막 라운드에 보낸 양. 그 회차를 N 라운드에 넣으려면 이만큼 줄여야 한다
+    둘 다 작으면 크기가 경계에 걸친 것이고, 실측 값이 크면 그 회차의 전송이 모델보다 크게 느렸던 것이다."""
+    n = min(s['observed_rounds'])
+    low = sum(1 for v in s['observed_rounds'] if v == n)
+    high = len(s['observed_rounds']) - low
+    over = max(s['run_last_round'][k] for k, v in s['run_rounds'].items() if v == n + 1)
+    fix = f"권장 −{kb((over + MARGIN_SEGMENTS) * payload / OVERHEAD)} (최소 −{kb(over * payload / OVERHEAD)})"
+    text = (f"{i}단계: 회차별 라운드가 {n} RTT({low}회)와 {n + 1} RTT({high}회)로 갈려 RTT를 {n}~{n + 1}로 봅니다. "
+            f"모든 회차를 {n} RTT로 고정하려면 {fix}입니다({n + 1} RTT가 나온 회차가 마지막 라운드에 보낸 양의 최댓값, 실측). ")
+    if p['rounds'] == n:
+        text += f"모델(시작 cwnd에서 라운드마다 2배)로는 {n} 라운드 한계까지 {head} 여유가 있습니다. "
+    elif p['rounds'] == n + 1:
+        text += f"모델(시작 cwnd에서 라운드마다 2배)로는 {n + 1} 라운드이고, 최소 −{kb(p['cut_segments'] * payload / OVERHEAD)}이면 {n} RTT가 됩니다. "
+    else:
+        return text + (f"모델(시작 cwnd에서 라운드마다 2배)로 계산하면 {p['rounds']} 라운드라 실측과 맞지 않으므로, "
+                       f"경계에 걸친 것인지는 판단하지 않고 '1 RTT 줄이려면'도 참고로만 봅니다.")
+    return text + (f"두 값이 모두 작으면 크기가 RTT 경계에 걸쳐 있다는 뜻이고, 실제 사용자도 {n} RTT와 {n + 1} RTT를 오갑니다. "
+                   f"실측 값이 모델 값보다 훨씬 크면 경계 때문이 아니라 {n + 1} RTT가 나온 회차의 전송이 모델보다 크게 느렸다는 뜻입니다.")
+
+
 def report(cal, what_if, target=None):
     out = ['### RTT 예산', '']
     total_rtt = 2   # None이면 대역폭 제한 구간이 있어 합산하지 않는다
@@ -222,8 +246,10 @@ def report(cal, what_if, target=None):
         obs = s['observed_rounds']
         unstable = obs and max(obs) - min(obs) >= UNSTABLE_SPREAD
         rate = s['rate_like'] is not None and s['rate_like'] >= RATE_CORR
+        # 1만 차이 나면 계산은 하되 RTT 수는 범위로 낸다(최빈값으로 고르면 거의 반반인 경우에도 한쪽을 버리게 된다)
+        split = bool(obs) and max(obs) - min(obs) == 1 and not rate
         obs_mode = mode(obs)[0] if obs else None
-        obs_txt = (f"{min(obs)}~{max(obs)}" if (unstable or rate) and min(obs) != max(obs) else f"{obs_mode}") + f" ({', '.join(map(str, obs))})" if obs else '-'
+        obs_txt = (f"{min(obs)}~{max(obs)}" if (unstable or rate or split) and min(obs) != max(obs) else f"{obs_mode}") + f" ({', '.join(map(str, obs))})" if obs else '-'
         if unstable or rate:
             add_rounds(s['run_rounds'])
             why = []
@@ -256,7 +282,10 @@ def report(cal, what_if, target=None):
         src = f"{start:.0f} ({len(s['start_cwnd_samples'])}회)" if s['start_cwnd'] else f"{start:.0f} (관측한 cwnd 하한)"
         label = f"{i}{' (가정)' if i in what_if else ''}{' (페이싱)' if s['paced_runs'] else ''}"
         out.append(f"| {label} | {segs:.0f} | {obs_txt if i not in what_if else str(p['rounds']) + ' (모델)'} | {src} | {cut} | {head} |")
-        if obs_mode and i not in what_if and p['rounds'] != obs_mode:
+        if split and i not in what_if:
+            notes.append(split_note(i, s, p, cal['payload'], head))
+            has_cut = True
+        elif obs_mode and i not in what_if and p['rounds'] != obs_mode:
             notes.append(f"{i}단계: 실측 라운드는 {obs_mode}인데 실측 시작 cwnd·증가율로 계산하면 {p['rounds']}입니다. 모델이 이 단계를 정확히 재현하지 못하므로 '1 RTT 줄이려면'은 참고로만 보세요.")
         prev_end_cwnd = start + segs if growth >= 1.9 else None
         if s['paced_runs']:
