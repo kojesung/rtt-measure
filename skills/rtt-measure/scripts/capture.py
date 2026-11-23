@@ -145,6 +145,8 @@ def main():
     a = ap.parse_args()
 
     if a.check:
+        # 수동 캡처 명령의 -w 경로가 이 폴더 안이다. 폴더가 없으면 tcpdump가 파일을 열지 못하고 바로 끝난다.
+        os.makedirs(a.out, exist_ok=True)
         ok, why = can_capture(a.iface)
         print('자동 캡처 가능' if ok else f'자동 캡처 불가: {why}')
         print('수동 캡처 명령어(본인 터미널에서 실행): sudo ' + ' '.join(tcpdump_cmd(a.iface, os.path.abspath(os.path.join(a.out, 'capture.pcap')))))
