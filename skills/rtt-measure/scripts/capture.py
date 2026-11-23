@@ -61,7 +61,19 @@ class DeclaredResources(HTMLParser):
 
 
 def default_iface():
-    return 'en0' if platform.system() == 'Darwin' else 'any'
+    """Linux는 any로 모든 인터페이스를 잡는다. macOS tcpdump는 any를 쓸 수 없어서 기본 경로가 나가는 인터페이스를 쓴다.
+    en0으로 고정하면 유선(독·USB 랜은 보통 en5 등)으로 바꿨을 때 캡처가 비어 버린다."""
+    if platform.system() != 'Darwin':
+        return 'any'
+    try:
+        out = subprocess.run(['route', '-n', 'get', 'default'], capture_output=True, text=True, timeout=3).stdout
+        for line in out.splitlines():
+            key, _, value = line.strip().partition(':')
+            if key == 'interface' and value.strip():
+                return value.strip()
+    except Exception:
+        pass
+    return 'en0'
 
 
 def tcpdump_cmd(iface, path):
