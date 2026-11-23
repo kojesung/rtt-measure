@@ -89,6 +89,16 @@ cp -r rtt-measure/skills/rtt-measure ~/.claude/skills/     # 모든 프로젝트
 # 또는 프로젝트의 .claude/skills/ 아래에 복사
 ```
 
+다른 에이전트는 `skills/rtt-measure` 폴더를 그 에이전트의 스킬 폴더에 복사합니다. 경로는 버전에 따라 바뀔 수 있으니 각 문서에서 확인하세요.
+
+| 에이전트 | 모든 프로젝트 | 프로젝트 하나 |
+| --- | --- | --- |
+| Claude Code | `~/.claude/skills/` | `.claude/skills/` |
+| Codex | `~/.agents/skills/` | `.agents/skills/` |
+| Cursor | `~/.cursor/skills/` | `.cursor/skills/` (`.claude/skills/`도 읽음) |
+
+복사한 뒤 에이전트를 다시 시작하면 스킬 목록에 뜹니다.
+
 ## 사용
 
 에이전트에게 주소와 함께 요청하면 됩니다.
