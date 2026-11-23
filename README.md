@@ -2,6 +2,8 @@
 
 > 번들을 1바이트 줄이면 로딩이 빨라질까요?
 
+**[이 스킬을 쓰면 뭐가 좋은가? →](docs/why-it-helps.md)** 과자 봉지 예시로 3분 만에 설명합니다.
+
 대부분은 빨라지지 않습니다. 서버는 파일을 한 번에 보내지 않고, 왕복(RTT) 한 번에 보낼 수 있는 양만큼씩 나눠 보냅니다. 그래서 로딩 시간은 바이트 수에 비례해서 줄지 않고, **왕복 횟수가 한 번 줄어드는 경계를 넘을 때** 계단처럼 줄어듭니다.
 
 `rtt-measure`는 배포된 페이지의 첫 로딩을 패킷 단위로 실측해서 그 경계가 어디인지 알려 주는 에이전트 스킬입니다.
@@ -183,6 +185,7 @@ skills/rtt-measure/
   scripts/budget.py   회차를 모아 RTT 예산 표를 계산
 tests/                합성 캡처와 실측 라운드 값으로 판정 규칙 확인
 docs/reading-results.md  결과 표 읽는 법
+docs/why-it-helps.md  과자 봉지 예시로 보는 이 스킬의 쓸모 (그림: docs/images/)
 docs/verification.md  검증 기록
 .claude-plugin/       Claude Code 플러그인·마켓플레이스 설정
 ```
