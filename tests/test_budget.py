@@ -1,6 +1,7 @@
 """budget.py 보고 규칙을 합성 analysis.json으로 확인한다.
   1) 총 RTT는 단계별 최빈값의 합이 아니라 회차별 합의 범위·분포
   2) 회차별 라운드가 N과 N+1로 갈리면 범위로 내고, 모델 여유와 실측 "N으로 고정하려면"을 함께 낸다
+  3) 판정 불가일 때 재측정 안내: 9회 미만이면 회차를 늘리고, 이미 9회 이상이면 네트워크를 바꾼다
 """
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'skills', 'rtt-measure', 'scripts'))
@@ -89,5 +90,19 @@ check('모델이 맞지 않으면 경계 판단 안 함', '판단하지 않고' 
 # 2 이상 차이 나면 지금처럼 판정 불가
 runs = [run(k, [[5], [60, 120, 200]]) for k in range(1, 4)] + [run(4, [[5], [30, 40, 60, 100, 150]])]
 check('2 이상 차이는 판정 불가', '판정 불가' in stage_row(budget(runs), 2), stage_row(budget(runs), 2))
+
+
+# 3) 재측정 안내
+def unstable(n_runs, rtts):
+    runs = [run(k + 1, [[5], [60, 120, 200]], rtt_ms=rtts[k]) for k in range(n_runs - 1)]
+    runs.append(run(n_runs, [[5], [30, 40, 60, 100, 150]], rtt_ms=rtts[-1]))
+    return next(l for l in budget(runs).splitlines() if 'RTT 수를 하나로 말할 수 없습니다' in l)
+
+line = unstable(5, [20] * 5)
+check('5회면 9회로 늘리라고 안내', '9회로 늘려' in line, line)
+line = unstable(9, [20] * 8 + [45])
+check('9회 + RTT 2배 흔들림이면 네트워크 변경', '이미 9회' in line and '2배 이상 흔들렸으므로' in line and '9회로 늘려' not in line, line)
+line = unstable(9, [20] * 9)
+check('9회 + RTT 안정이면 네트워크 변경', '이미 9회' in line and '유선이나 다른 네트워크' in line, line)
 
 sys.exit(1 if fail else 0)

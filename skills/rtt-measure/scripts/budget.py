@@ -217,6 +217,19 @@ def split_note(i, s, p, payload, head):
                    f"실측 값이 모델 값보다 훨씬 크면 경계 때문이 아니라 {n + 1} RTT가 나온 회차의 전송이 모델보다 크게 느렸다는 뜻입니다.")
 
 
+ENOUGH_RUNS = 9   # SKILL.md가 흔들릴 때 늘리라고 권하는 회차 수
+
+
+def remeasure_advice(cal):
+    """이미 충분히 쟀다면 회차를 더 늘리라는 말은 소용없다. 그때는 네트워크를 바꿔 보라고 한다."""
+    n = cal['runs']
+    if n < ENOUGH_RUNS:
+        return f"회차를 {ENOUGH_RUNS}회로 늘려 다시 재 보세요."
+    lo, hi = cal['rtt_range']
+    why = f"전송 중 RTT가 회차별 {lo:.1f}~{hi:.1f}ms로 2배 이상 흔들렸으므로" if hi >= 2 * lo else "회차를 더 늘려도 나아지지 않을 수 있으므로"
+    return f"이미 {n}회를 쟀고 {why}, 유선이나 다른 네트워크에서 다시 재 보세요."
+
+
 def report(cal, what_if, target=None):
     out = ['### RTT 예산', '']
     total_rtt = 2   # None이면 대역폭 제한 구간이 있어 합산하지 않는다
@@ -258,7 +271,7 @@ def report(cal, what_if, target=None):
             if rate:
                 why.append(f"첫 라운드 크기가 회차별 RTT에 비례함(상관 {s['rate_like']}) → 서버가 일정한 속도로 보낸 데이터를 RTT 길이로 잘라 셌을 가능성")
             out.append(f"| {i} | {s['segments_median']:.0f} | {obs_txt} | - | 판정 불가 | - |")
-            notes.append(f"{i}단계: RTT 수를 하나로 말할 수 없습니다. " + '; '.join(why) + ". 크기 비교는 유효하고, RTT는 범위로만 봅니다. 회차를 늘려(예: 9회) 다시 재 보세요.")
+            notes.append(f"{i}단계: RTT 수를 하나로 말할 수 없습니다. " + '; '.join(why) + ". 크기 비교는 유효하고, RTT는 범위로만 봅니다. " + remeasure_advice(cal))
             continue
         start = s['start_cwnd'] or s.get('cwnd_lower_bound') or prev_end_cwnd
         # 슬로 스타트에서 cwnd는 라운드마다 2배(RFC 5681, BBR STARTUP도 라운드당 2배). 측정한 라운드 크기 비율은
