@@ -72,6 +72,8 @@ preview나 스테이징 주소를 같은 방법으로 재서, 실제로 왕복�
 npx skills add kojesung/rtt-measure
 ```
 
+이 방법만 Node.js(`npx`)가 필요합니다. 설치하는 데만 쓰고, 측정은 Python으로 합니다. Node.js가 없으면 아래 두 방법을 쓰세요.
+
 **Claude Code 플러그인**
 
 ```
@@ -115,7 +117,9 @@ Claude Code 플러그인으로 설치했다면 슬래시 명령에 플러그인 
 
 - macOS 또는 Linux, Python 3
 - Linux는 시스템 패키지가 더 필요할 수 있습니다. Debian/Ubuntu의 `python3-venv`, Chromium이 쓰는 시스템 라이브러리(`playwright install-deps`)입니다. 없으면 에이전트가 설치 명령을 알려 주거나, 데스크톱 환경이면 비밀번호 창(`pkexec`)으로 설치합니다.
-- `tcpdump` (macOS는 기본 포함)
+- `tcpdump` (macOS는 기본 포함. Linux에서 없으면 에이전트가 설치합니다.)
+
+Python 패키지(dpkt, playwright)와 Chromium은 미리 설치하지 않아도 됩니다. 처음 측정할 때 에이전트가 임시 폴더에 설치합니다.
 - 패킷 캡처 권한. 권한이 없으면 에이전트가 아래 중 하나를 고르게 합니다. 어느 쪽이든 비밀번호는 OS 창이나 본인 터미널에 직접 입력하고, 에이전트는 비밀번호를 보거나 대신 입력하지 않습니다.
   1. **이번 부팅 동안 자동 캡처 (macOS 권장)**: macOS 비밀번호 창이 한 번 뜹니다. 재부팅 전까지는 재측정해도 다시 묻지 않고, 재부팅하면 원래대로 돌아갑니다.
   2. **직접 캡처**: 에이전트가 알려 주는 `sudo tcpdump ...`를 새 터미널 창에서 켜 두고, 측정이 끝나면 Ctrl+C로 끕니다.
