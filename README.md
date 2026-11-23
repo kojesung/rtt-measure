@@ -192,6 +192,7 @@ docs/verification.md  검증 기록
 ```bash
 pip install dpkt
 python tests/test_real_rounds.py                                   # 실측 라운드 값으로 판정 규칙 확인
+python tests/test_budget.py                                        # 합성 회차로 예산 보고 규칙 확인
 python tests/run_cases.py skills/rtt-measure/scripts/analyze.py    # 합성 캡처 6종의 판정 결과 출력
 ```
 

@@ -83,6 +83,7 @@ def calibrate(runs):
             'index': i + 1,
             'runs': len(per),
             'observed_rounds': observed,                       # 회차별로 실제 센 라운드 수
+            'run_rounds': {k: len(runs[k]['stages'][i]['round_segments']) for k in ok},   # 회차 번호 → 라운드 수 (총합을 회차별로 더할 때)
             'rate_like': rate_like(firsts),
             'segments_median': statistics.median(s['segments'] for s in per),
             'rounds_mode': mode([len(s['round_segments']) for s in per]),
@@ -181,9 +182,27 @@ def kb(b):
     return f'{b / 1000:.1f}kB'
 
 
+def total_text(per_run):
+    """회차별 총 RTT의 범위와 분포. 단계별 최빈값을 더하면 실제로 나온 적 없는 조합이 될 수 있어 회차마다 더한다."""
+    totals = [v for v in per_run.values() if v is not None]
+    if not totals:
+        return '판정할 수 있는 회차 없음'
+    excluded = len(per_run) - len(totals)
+    dist = sorted(Counter(totals).items())
+    txt = f'{dist[0][0]}' if len(dist) == 1 else f"{dist[0][0]}~{dist[-1][0]} ({', '.join(f'{v}: {c}회' for v, c in dist)})"
+    return txt + (f' · 대역폭 제한 등으로 {excluded}회 제외' if excluded else '')
+
+
 def report(cal, what_if, target=None):
     out = ['### RTT 예산', '']
-    total_rtt, total_hi = 2, 2
+    total_rtt = 2   # None이면 대역폭 제한 구간이 있어 합산하지 않는다
+    per_run = {k: 2 for k in range(cal['runs'])}   # 회차별 총 RTT (handshake 2 포함). None = 이 회차는 합산에서 뺌
+
+    def add_rounds(counts):
+        """counts: 회차 번호 → 이 단계 라운드 수. 없는 회차(대역폭 제한 등)는 총합에서 뺀다"""
+        for k in per_run:
+            per_run[k] = None if per_run[k] is None or k not in counts else per_run[k] + counts[k]
+
     out.append('| 단계 | 세그먼트 | 라운드(RTT, 회차별 실측) | 시작 cwnd(실측) | 1 RTT 줄이려면 | 다음 RTT까지 여유 |')
     out.append('| --- | --- | --- | --- | --- | --- |')
     notes = []
@@ -205,12 +224,8 @@ def report(cal, what_if, target=None):
         rate = s['rate_like'] is not None and s['rate_like'] >= RATE_CORR
         obs_mode = mode(obs)[0] if obs else None
         obs_txt = (f"{min(obs)}~{max(obs)}" if (unstable or rate) and min(obs) != max(obs) else f"{obs_mode}") + f" ({', '.join(map(str, obs))})" if obs else '-'
-        if total_rtt is not None:
-            if unstable or rate:
-                total_rtt += min(obs); total_hi += max(obs)
-            elif obs_mode:
-                total_rtt += obs_mode; total_hi += obs_mode
         if unstable or rate:
+            add_rounds(s['run_rounds'])
             why = []
             if unstable:
                 why.append(f"회차별 라운드 수가 {min(obs)}~{max(obs)}로 {UNSTABLE_SPREAD} 이상 차이 남")
@@ -228,11 +243,13 @@ def report(cal, what_if, target=None):
         if i in what_if:
             segs = math.ceil(what_if[i] * OVERHEAD / cal['payload'])
         if start is None:
+            add_rounds(s['run_rounds'])
             out.append(f"| {i} | {segs:.0f} | {obs_txt} | 측정 불가 | - | - |")
             if obs_mode == 1:
                 notes.append(f"{i}단계: 한 라운드에 끝나 시작 cwnd를 알 수 없습니다. 더 줄여도 RTT는 줄지 않습니다.")
             continue
         p = plan(segs, start, growth)
+        add_rounds({k: p['rounds'] for k in per_run} if i in what_if else s['run_rounds'])
         cut = f"권장 −{kb((p['cut_segments'] + MARGIN_SEGMENTS) * cal['payload'] / OVERHEAD)} (최소 −{kb(p['cut_segments'] * cal['payload'] / OVERHEAD)})" if p['cut_segments'] else '-'
         has_cut = has_cut or bool(p['cut_segments'])
         head = kb(p['headroom_segments'] * cal['payload'] / OVERHEAD)
@@ -248,7 +265,7 @@ def report(cal, what_if, target=None):
             notes.append(f"{i}단계: {s['overlap_runs']}/{s['runs']}회에서 HTML을 다 받기 전에 요청이 나갔습니다(early flush). 서버가 이 요청을 받기 전에 보낸 HTML은 앞 단계로 셌고, 받은 뒤에 보낸 HTML이 있으면 이 단계와 cwnd를 나눠 써서 이 단계 전송량에 포함됩니다.")
     out.append('')
     upto = f'{target}단계까지' if target else '전체 단계'
-    total = '대역폭 제한 구간이 있어 RTT로 합산 불가' if total_rtt is None else (f'{total_rtt}~{total_hi}' if total_hi != total_rtt else f'{total_rtt}')
+    total = '대역폭 제한 구간이 있어 RTT로 합산 불가' if total_rtt is None else total_text(per_run)
     out.append(f"**{upto} 총 RTT (handshake 2 포함, 회차별 실측 라운드 기준): {total}**")
 
     out.append('')

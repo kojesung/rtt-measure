@@ -13,4 +13,5 @@ jobs:
           python-version: '3.12'
       - run: pip install dpkt
       - run: python tests/test_real_rounds.py
+      - run: python tests/test_budget.py
       - run: python tests/run_cases.py skills/rtt-measure/scripts/analyze.py
