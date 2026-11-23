@@ -59,7 +59,17 @@ def stage_row(text, i):
 
 
 def note(text, i):
-    return next((l for l in text.splitlines() if l.startswith(f'- {i}단계: 회차별 라운드가')), '')
+    """'- i단계: … 오갔습니다' 줄과 그 아래 '  - ' 줄들을 한 문자열로"""
+    lines = text.splitlines()
+    k = next((j for j, l in enumerate(lines) if l.startswith(f'- {i}단계:') and '오갔습니다' in l), None)
+    if k is None:
+        return ''
+    block = [lines[k]]
+    for l in lines[k + 1:]:
+        if not l.startswith('  - '):
+            break
+        block.append(l)
+    return '\n'.join(block)
 
 
 # 2) 핫스팟 실측과 같은 모양: 3 RTT 5회, 4 RTT 4회. 4 RTT 회차는 증가가 2배에 크게 못 미쳐(58 → 78) 마지막 라운드가 큼
@@ -67,20 +77,21 @@ runs = [run(k, [[5], [60, 123, 222]]) for k in range(1, 6)] + [run(k, [[5], [58,
 text = budget(runs)
 check('갈린 단계는 범위로 표시', '| 3~4 (' in stage_row(text, 2), stage_row(text, 2))
 n = note(text, 2)
-check('분포를 적음', '3 RTT(5회)와 4 RTT(4회)' in n, n)
-check('실측 마지막 라운드로 고정 감소량', '최소 −172.0kB' in n, n)        # 141 × 1238 / 1.015
-check('모델이 N이면 여유를 함께', '3 라운드 한계까지 18.3kB 여유' in n, n)  # 420 − 405 = 15세그먼트
+check('분포를 적음', '3 RTT 5회, 4 RTT 4회' in n, n)
+check('실측 마지막 라운드로 고정 감소량', '172.0kB 이상 줄이면' in n, n)        # 141 × 1238 / 1.015
+check('모델이 N이면 늘릴 수 있는 양을 함께', '18.3kB 넘게 늘면' in n and '항상 4 RTT' in n, n)
+check('느린 회차의 배율을 보여 줌', '2번째 라운드에서 1.34배만' in n, n)  # 420 − 405 = 15세그먼트
 check('총합도 회차별', '6~7 (6: 5회, 7: 4회)' in total_line(text), total_line(text))
 
 # 크기가 경계에 걸친 경우: 4 RTT 회차가 마지막 라운드에 2세그먼트만 보냄 → 실측 감소량도 작음
 runs = [run(k, [[5], [60, 120, 225]]) for k in range(1, 4)] + [run(k, [[5], [60, 118, 225, 2]]) for k in range(4, 6)]
 n = note(budget(runs), 2)
-check('경계: 실측 감소량이 작음', '최소 −2.4kB' in n, n)
+check('경계: 실측 감소량이 작음', '2.4kB 이상 줄이면' in n, n)
 
 # 모델이 N+1이면 모델 기준 감소량을 적는다
 runs = [run(k, [[5], [60, 125, 245]]) for k in range(1, 4)] + [run(k, [[5], [60, 120, 240, 10]]) for k in range(4, 6)]
 n = note(budget(runs), 2)
-check('모델이 N+1이면 모델 감소량', '모델(시작 cwnd에서 라운드마다 2배)로는 4 라운드' in n and '이면 3 RTT가 됩니다' in n, n)
+check('모델이 N+1이면 모델 감소량', '12.2kB 이상 줄이면 2배씩 보낼 때 3 RTT 안에' in n, n)
 
 # 모델이 N도 N+1도 아니면 경계라고 하지 않는다
 runs = [run(k, [[5], [150, 100, 50]]) for k in range(1, 4)] + [run(k, [[5], [150, 100, 40, 10]]) for k in range(4, 6)]

@@ -84,7 +84,7 @@ def calibrate(runs):
             'runs': len(per),
             'observed_rounds': observed,                       # 회차별로 실제 센 라운드 수
             'run_rounds': {k: len(runs[k]['stages'][i]['round_segments']) for k in ok},   # 회차 번호 → 라운드 수 (총합을 회차별로 더할 때)
-            'run_last_round': {k: runs[k]['stages'][i]['round_segments'][-1] for k in ok},  # 회차 번호 → 마지막 라운드 세그먼트 수
+            'run_round_segments': {k: runs[k]['stages'][i]['round_segments'] for k in ok},  # 회차 번호 → 라운드별 세그먼트 수
             'rate_like': rate_like(firsts),
             'segments_median': statistics.median(s['segments'] for s in per),
             'rounds_mode': mode([len(s['round_segments']) for s in per]),
@@ -194,27 +194,48 @@ def total_text(per_run):
     return txt + (f' · 대역폭 제한 등으로 {excluded}회 제외' if excluded else '')
 
 
+def slowest_growth(rounds):
+    """마지막 라운드(남은 양만 보낸 부분 라운드)를 빼고, 가장 적게 늘어난 라운드 번호와 배율"""
+    ratios = [(j + 2, rounds[j + 1] / rounds[j]) for j in range(len(rounds) - 2) if rounds[j]]
+    return min(ratios, key=lambda x: x[1]) if ratios else None
+
+
 def split_note(i, s, p, payload, head):
-    """회차별 라운드가 N과 N+1로 갈린 단계. 경계 여부를 기준 숫자로 판정하지 않고 두 값을 나란히 낸다.
-    - 모델 값: 시작 cwnd에서 라운드마다 2배일 때 N 라운드 한계까지의 거리
-    - 실측 값: N+1이 나온 회차가 마지막 라운드에 보낸 양. 그 회차를 N 라운드에 넣으려면 이만큼 줄여야 한다
-    둘 다 작으면 크기가 경계에 걸친 것이고, 실측 값이 크면 그 회차의 전송이 모델보다 크게 느렸던 것이다."""
+    """회차별 라운드가 N과 N+1로 갈린 단계. 경계 여부를 기준 숫자로 판정하지 않고, 회차 예시와
+    "늘리면 / 줄이면 어떻게 되는지"를 나란히 보여 준다.
+    - 늘리는 쪽(모델): 라운드마다 정확히 2배여도 N 라운드에 담을 수 없게 되는 크기
+    - 줄이는 쪽(실측): N+1이 나온 회차의 마지막 라운드. 이만큼 줄이면 그 회차도 N 라운드에 담긴다
+    둘 다 작으면 크기가 경계에 걸친 것이고, 줄일 양이 크면 그 회차의 전송이 느렸던 것이다."""
     n = min(s['observed_rounds'])
     low = sum(1 for v in s['observed_rounds'] if v == n)
     high = len(s['observed_rounds']) - low
-    over = max(s['run_last_round'][k] for k, v in s['run_rounds'].items() if v == n + 1)
-    fix = f"권장 −{kb((over + MARGIN_SEGMENTS) * payload / OVERHEAD)} (최소 −{kb(over * payload / OVERHEAD)})"
-    text = (f"{i}단계: 회차별 라운드가 {n} RTT({low}회)와 {n + 1} RTT({high}회)로 갈려 RTT를 {n}~{n + 1}로 봅니다. "
-            f"모든 회차를 {n} RTT로 고정하려면 {fix}입니다({n + 1} RTT가 나온 회차가 마지막 라운드에 보낸 양의 최댓값, 실측). ")
+    rs = s['run_round_segments']
+    fast = next(rs[k] for k, v in s['run_rounds'].items() if v == n)
+    slow = max((rs[k] for k, v in s['run_rounds'].items() if v == n + 1), key=lambda r: r[-1])
+    over = slow[-1]
+    seq = lambda r: ' → '.join(map(str, r)) + '세그먼트'
+
+    g_fast, g_slow = slowest_growth(fast), slowest_growth(slow)
+
+    lines = [f"{i}단계: {n} RTT와 {n + 1} RTT를 오갔습니다({n} RTT {low}회, {n + 1} RTT {high}회). RTT는 {n}~{n + 1}로 봅니다."]
+    lines.append(f"{n} RTT 회차 예: {seq(fast)}" + (f" (라운드마다 {g_fast[1]:.2f}배 이상 늘어남)" if g_fast and g_fast[1] >= 1 else ''))
+    why_slow = f"{g_slow[0]}번째 라운드에서 {g_slow[1]:.2f}배만 늘어, " if g_slow and g_slow[1] < SLOW_START_GROWTH else ''
+    lines.append(f"{n + 1} RTT 회차 예: {seq(slow)} ({why_slow}마지막 {over}세그먼트가 한 라운드 밀림)")
+    cut_fix = f"{kb(over * payload / OVERHEAD)} 이상 줄이면(권장 {kb((over + MARGIN_SEGMENTS) * payload / OVERHEAD)})"
     if p['rounds'] == n:
-        text += f"모델(시작 cwnd에서 라운드마다 2배)로는 {n} 라운드 한계까지 {head} 여유가 있습니다. "
+        lines.append(f"{head} 넘게 늘면: 라운드마다 정확히 2배씩 보내도 {n} 라운드에 담을 수 없어, {n} RTT로 끝나던 회차도 {n + 1} RTT가 됩니다. 이 네트워크에서는 항상 {n + 1} RTT로 봐야 합니다.")
+        lines.append(f"{cut_fix}: 이번에 {n + 1} RTT였던 회차도 {n} RTT 안에 들어옵니다(실측).")
     elif p['rounds'] == n + 1:
-        text += f"모델(시작 cwnd에서 라운드마다 2배)로는 {n + 1} 라운드이고, 최소 −{kb(p['cut_segments'] * payload / OVERHEAD)}이면 {n} RTT가 됩니다. "
+        lines.append(f"지금 크기는 라운드마다 정확히 2배씩 보내도 {n} 라운드에 담을 수 없어, {n} RTT 회차는 서버가 2배보다 많이 보낸 경우입니다. "
+                     f"{kb(p['cut_segments'] * payload / OVERHEAD)} 이상 줄이면 2배씩 보낼 때 {n} RTT 안에 들어옵니다.")
+        lines.append(f"{cut_fix}: 이번에 {n + 1} RTT였던 회차도 {n} RTT 안에 들어옵니다(실측).")
     else:
-        return text + (f"모델(시작 cwnd에서 라운드마다 2배)로 계산하면 {p['rounds']} 라운드라 실측과 맞지 않으므로, "
-                       f"경계에 걸친 것인지는 판단하지 않고 '1 RTT 줄이려면'도 참고로만 봅니다.")
-    return text + (f"두 값이 모두 작으면 크기가 RTT 경계에 걸쳐 있다는 뜻이고, 실제 사용자도 {n} RTT와 {n + 1} RTT를 오갑니다. "
-                   f"실측 값이 모델 값보다 훨씬 크면 경계 때문이 아니라 {n + 1} RTT가 나온 회차의 전송이 모델보다 크게 느렸다는 뜻입니다.")
+        lines.append(f"{cut_fix}: 이번에 {n + 1} RTT였던 회차도 {n} RTT 안에 들어옵니다(실측).")
+        lines.append(f"라운드마다 2배로 계산하면 {p['rounds']} 라운드라 실측과 맞지 않습니다. 경계에 걸친 것인지는 판단하지 않고, '1 RTT 줄이려면'도 참고로만 봅니다.")
+        return '\n  - '.join(lines)
+    lines.append(f"늘릴 수 있는 양과 줄여야 하는 양이 둘 다 작으면 크기가 RTT 경계에 걸쳐 있다는 뜻이고, 실제 사용자도 {n} RTT와 {n + 1} RTT를 오갑니다. "
+                 f"줄여야 하는 양이 훨씬 크면 크기보다 {n + 1} RTT 회차의 전송이 느렸던 것이 원인입니다.")
+    return '\n  - '.join(lines)
 
 
 ENOUGH_RUNS = 9   # SKILL.md가 흔들릴 때 늘리라고 권하는 회차 수
