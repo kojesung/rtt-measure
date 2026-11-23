@@ -99,6 +99,8 @@ cp -r rtt-measure/skills/rtt-measure ~/.claude/skills/     # 모든 프로젝트
 https://example.com/ 과 /search 페이지에서 몇 kB 줄이면 RTT가 줄어드는지 측정해 줘
 ```
 
+Claude Code 플러그인으로 설치했다면 슬래시 명령에 플러그인 이름이 앞에 붙어 `/rtt-measure:rtt-measure`가 됩니다. `/rtt`까지 입력하면 자동완성에 뜹니다. 슬래시 명령 없이 두 번째 예시처럼 말로 요청해도 에이전트가 스킬을 불러옵니다.
+
 에이전트는 다음 순서로 진행합니다.
 
 1. 임시 폴더에 Python 가상 환경과 Chromium을 설치합니다(프로젝트에는 아무것도 설치하지 않습니다).
