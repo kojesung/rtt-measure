@@ -217,7 +217,7 @@ def report(cal, what_if, target=None):
             if rate:
                 why.append(f"첫 라운드 크기가 회차별 RTT에 비례함(상관 {s['rate_like']}) → 서버가 일정한 속도로 보낸 데이터를 RTT 길이로 잘라 셌을 가능성")
             out.append(f"| {i} | {s['segments_median']:.0f} | {obs_txt} | - | 판정 불가 | - |")
-            notes.append(f"{i}단계: RTT 수를 하나로 말할 수 없습니다. " + '; '.join(why) + ". 크기 비교는 유효하고, RTT는 범위로만 봅니다. 유선 연결이나 회차를 늘려(예: 9회) 다시 재 보세요.")
+            notes.append(f"{i}단계: RTT 수를 하나로 말할 수 없습니다. " + '; '.join(why) + ". 크기 비교는 유효하고, RTT는 범위로만 봅니다. 회차를 늘려(예: 9회) 다시 재 보세요.")
             continue
         start = s['start_cwnd'] or s.get('cwnd_lower_bound') or prev_end_cwnd
         # 슬로 스타트에서 cwnd는 라운드마다 2배(RFC 5681, BBR STARTUP도 라운드당 2배). 측정한 라운드 크기 비율은
