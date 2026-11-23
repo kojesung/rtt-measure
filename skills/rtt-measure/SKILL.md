@@ -33,6 +33,10 @@ PLAYWRIGHT_BROWSERS_PATH="$RTT_TMP/browsers" "$RTT_TMP/venv/bin/python" -m playw
 ```
 이후 스크립트는 `PLAYWRIGHT_BROWSERS_PATH="$RTT_TMP/browsers" "$RTT_TMP/venv/bin/python" scripts/...`로 실행한다.
 
+Linux에서는 아래 시스템 패키지가 없어 실패할 수 있다. 둘 다 관리자 권한이 필요하므로 아래 캡처 권한과 같은 방식으로 처리한다. 데스크톱 환경이면 `pkexec`로 비밀번호 창을 띄우고, 아니면 사용자에게 명령을 주고 본인 터미널에서 실행하게 한다.
+- `python3 -m venv`가 `ensurepip is not available`로 실패: Debian/Ubuntu는 `python3-venv` 패키지가 필요하다(`apt-get install -y python3-venv`).
+- 측정에서 Chromium이 공유 라이브러리를 찾지 못해 실행되지 않음: Chromium이 쓰는 시스템 라이브러리를 설치한다(`"$RTT_TMP/venv/bin/python" -m playwright install-deps chromium`, 내부에서 apt-get을 쓴다). pkexec로 실행할 때는 root 환경에서도 같은 venv의 python을 절대 경로로 넘긴다.
+
 패킷 캡처에는 관리자 권한이 필요하다. 비밀번호를 대신 입력하거나 요구하지 않는다. 먼저 자동 캡처가 되는지 확인한다.
 ```bash
 "$RTT_TMP/venv/bin/python" scripts/capture.py --check --out rtt-runs
