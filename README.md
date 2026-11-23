@@ -111,7 +111,10 @@ https://example.com/ 과 /search 페이지에서 몇 kB 줄이면 RTT가 줄어�
 
 - macOS 또는 Linux, Python 3
 - `tcpdump` (macOS는 기본 포함)
-- 패킷 캡처 권한. 권한이 없으면 에이전트가 `sudo tcpdump ...` 명령을 알려 주고, 사용자가 본인 터미널에서 직접 실행합니다. 에이전트가 비밀번호를 요구하거나 대신 입력하지 않습니다.
+- 패킷 캡처 권한. 권한이 없으면 에이전트가 아래 중 하나를 고르게 합니다. 어느 쪽이든 비밀번호는 OS 창이나 본인 터미널에 직접 입력하고, 에이전트는 비밀번호를 보거나 대신 입력하지 않습니다.
+  1. **이번 부팅 동안 자동 캡처 (macOS 권장)**: macOS 비밀번호 창이 한 번 뜹니다. 재부팅 전까지는 재측정해도 다시 묻지 않고, 재부팅하면 원래대로 돌아갑니다.
+  2. **직접 캡처**: 에이전트가 알려 주는 `sudo tcpdump ...`를 새 터미널 창에서 켜 두고, 측정이 끝나면 Ctrl+C로 끕니다.
+  3. **영구 설정**: macOS는 Wireshark(ChmodBPF 포함) 또는 `brew install --cask wireshark-chmodbpf`, Linux는 tcpdump에 `setcap`으로 권한을 줍니다. 한 번 설정하면 다시 묻지 않습니다.
 - 배포된 HTTPS 주소. 운영, preview, 스테이징 모두 됩니다. `localhost`는 RTT가 0에 가깝고 MSS가 달라서 받지 않습니다.
 
 ## 측정 범위와 한계

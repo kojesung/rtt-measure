@@ -38,7 +38,35 @@ PLAYWRIGHT_BROWSERS_PATH="$RTT_TMP/browsers" "$RTT_TMP/venv/bin/python" -m playw
 "$RTT_TMP/venv/bin/python" scripts/capture.py --check --out rtt-runs
 ```
 - **자동 캡처 가능**(종료 코드 0): 사용자가 캡처 권한을 이미 설정해 둔 경우다(macOS의 ChmodBPF, Linux의 `cap_net_raw` 등). 3단계에서 스크립트가 회차마다 직접 캡처한다.
-- **자동 캡처 불가**: 수동 캡처로 진행한다. `--check`가 출력한 `sudo tcpdump ...` 명령을 사용자에게 주고, **본인 터미널에서 실행해 켜 둔 채로** 알려 달라고 요청한다. 권한을 영구로 설정하라고 요구하지 않는다. tcpdump가 없으면 설치 방법을 안내한다(macOS는 기본 포함).
+- **자동 캡처 불가**: 아래 선택지를 사용자에게 보여 주고 고르게 한다. 사용자가 고르기 전에는 권한을 바꾸지 않는다.
+
+에이전트의 셸에는 비밀번호를 입력할 터미널이 없어서 `sudo`를 직접 실행하면 `a terminal is required`로 실패한다. 그래서 관리자 권한이 필요한 명령은 OS의 비밀번호 창(macOS `osascript`, Linux 데스크톱 `pkexec`)으로 실행하거나 사용자가 본인 터미널에서 실행한다. 어느 쪽이든 비밀번호는 사용자가 OS에 직접 입력하고, 에이전트는 보지 않는다.
+
+| 선택지 | 하는 일 | 사용자가 하는 일 |
+| --- | --- | --- |
+| 1. 이번 부팅 동안 자동 캡처 (macOS 권장) | 비밀번호 창으로 `/dev/bpf*` 소유자를 현재 사용자로 바꾼다. 재부팅하면 원래대로 돌아간다 | 비밀번호 한 번 입력 |
+| 2. 직접 캡처 | 사용자가 본인 터미널에서 `sudo tcpdump`를 켜 두고, 측정 뒤 끈다 | 터미널에서 실행·종료 |
+| 3. 영구 설정 | 한 번 설정하면 이후 측정에서 묻지 않는다. 시스템 설정을 계속 바꿔 두는 것이므로 사용자가 직접 정한다 | 설정 한 번 |
+
+**1. 이번 부팅 동안 자동 캡처 (macOS)**
+```bash
+osascript -e "do shell script \"chown $(id -un) /dev/bpf*\" with administrator privileges"
+"$RTT_TMP/venv/bin/python" scripts/capture.py --check --out rtt-runs   # 종료 코드 0이면 자동 캡처로 진행
+```
+- 실행 전에 "macOS 비밀번호 창이 뜨면 입력해 주세요. 재부팅 전까지 이 계정이 패킷을 캡처할 수 있게 됩니다"라고 알린다.
+- 사용자가 창을 취소하면(`User canceled`, -128) 다시 묻지 말고 2나 3을 고르게 한다.
+- 이후 재측정이나 다른 페이지 측정에서도 재부팅 전까지는 다시 묻지 않는다.
+- Linux에는 재부팅 전까지만 유지되는 같은 방법이 없으므로 2나 3을 고르게 한다.
+
+**2. 직접 캡처**
+`--check`가 출력한 `sudo tcpdump ...` 명령을 주고, **본인 터미널의 새 창에서 실행해 켜 둔 채로** 알려 달라고 요청한다. 에이전트 세션 안에서 실행하면(Claude Code의 `!` 등) 측정이 끝날 때까지 세션이 멈추므로 새 창이어야 한다. 3단계에서 `--no-capture`로 측정한다.
+
+**3. 영구 설정**
+- macOS: Wireshark를 설치하면서 ChmodBPF를 함께 설치하거나, 본인 터미널에서 `brew install --cask wireshark-chmodbpf`를 실행한다(설치 중 sudo 비밀번호를 묻기 때문에 에이전트가 대신 실행할 수 없다). 설치 후 로그아웃했다가 다시 로그인해야 적용된다.
+- Linux: tcpdump에 캡처 권한을 준다. 데스크톱 환경이면 에이전트가 `pkexec setcap cap_net_raw,cap_net_admin=eip "$(command -v tcpdump)"`로 비밀번호 창을 띄우고, 아니면 사용자가 본인 터미널에서 `sudo setcap ...`을 실행한다.
+- 설정이 끝나면 `--check`를 다시 실행해 종료 코드 0을 확인한다.
+
+tcpdump가 없으면(Linux) 설치한다. 데스크톱 환경이면 `pkexec apt-get install -y tcpdump`(배포판에 맞는 패키지 관리자)로 비밀번호 창을 띄우고, 아니면 사용자에게 설치 명령을 주고 본인 터미널에서 실행하게 한다. macOS는 기본 포함이다.
 - VPN이 켜져 있으면 MSS와 RTT가 달라진다. 실제 사용자 조건에 가깝게 재려면 끄도록 안내한다.
 
 ### 3. 측정
