@@ -173,13 +173,13 @@ for j in rtt-runs/run-*.json; do … scripts/analyze.py rtt-runs/capture.pcap --
 
 ### 9. (선택) 이론 계산 도구 보정
 빌드 결과물로 RTT를 계산하는 도구를 함께 쓴다면, 기본 가정(MSS 1,460, 초기 cwnd 10 등)을 실측값으로 바꿔 줄 수 있다.
-- 세그먼트당 데이터 = `payload_per_segment` (예: MSS 1250 − timestamp 12 = 1238)
+- 세그먼트당 데이터 = `payload_per_segment` = MSS − `tcp_option_bytes`(서버 데이터 세그먼트 헤더에서 읽은 옵션 길이, 예: 1250 − 12 = 1238). `payload_source`가 `negotiated`면 데이터 세그먼트가 없어 협상값으로 추정한 것
 - TLS 응답 세그먼트 = `tls_server_segments`
 - 초기 cwnd = `init_cwnd_lower_bound` (관측한 하한)
 
 ## 해석 참고
 - **첫 라운드가 초기 cwnd 10보다 큰 이유**: 서버의 TLS 응답과 HTML 응답이 ACK되면서 cwnd가 이미 늘었고, 서버의 초기 cwnd 자체가 10보다 클 수도 있다. 둘을 패킷만으로 정확히 나눌 수는 없다. 그래서 예산은 "초기 cwnd"를 추정하지 않고 **실측한 첫 라운드 크기**로 계산한다.
-- **MSS가 1,460이 아닌 이유**: 서버와 경로가 정한 MSS에서 TCP timestamp 옵션(12바이트)이 빠진다. 예: MSS 1250 → 데이터 1238.
+- **MSS가 1,460이 아닌 이유**: 서버와 경로가 정한 MSS에서 세그먼트마다 붙는 TCP 옵션(보통 timestamp 12바이트)이 빠진다. 옵션 길이는 캡처한 헤더에서 직접 읽는다. 예: MSS 1250 → 데이터 1238.
 - **증가율이 2배가 아닌 경우**: BBR을 쓰는 서버(CloudFront 등)는 측정한 대역폭으로 속도를 정해서 정확히 2배가 아닐 수 있다. 실측 증가율을 쓴다.
 - **1단계에 서버 대기가 보이는 경우**: CDN이 HTML을 오리진에서 가져오느라 늦게 보낸 것이다. cwnd 하한보다 적게 보낸 뒤의 공백은 라운드로 세지 않는다.
 - **라운드는 시간이 아니라 ACK 인과관계로 나눈다**: 서버 세그먼트의 TCP timestamp(TSecr)는 서버가 그 세그먼트를 보낼 때 받아 둔 가장 최근 클라이언트 ACK의 TSval이다. 라운드의 첫 세그먼트를 확인한 ACK를 서버가 되돌려 주기 시작하면 다음 라운드로 센다(BBR이 라운드를 세는 방식과 같다). 시간 격자로 자르면 페이싱이나 큐로 늘어난 RTT 때문에 경계가 어긋나 조각 라운드가 생기는데, 이 방식은 그 영향을 받지 않는다(`round_method: ack`). timestamp가 없는 연결(Windows 클라이언트 등)만 시간 공백 방식으로 대체하고(`round_method: time`), 이때는 결과를 덜 믿는다고 보고에 적는다.

@@ -48,7 +48,7 @@ TCP 서버는 연결 직후 조금만 보내고, 받았다는 응답(ACK)이 돌
 
 문제는 그 경계가 서버마다 다르다는 점입니다. 위 표는 교과서 값일 뿐입니다.
 
-- 세그먼트당 데이터는 1,460B가 아닌 경우가 많습니다(예: MSS 1250 − TCP timestamp 12 = 1,238B).
+- 세그먼트당 데이터는 1,460B가 아닌 경우가 많습니다. 캡처한 서버 데이터 세그먼트의 헤더에서 TCP 옵션 길이를 읽어 MSS에서 뺍니다(예: MSS 1250 − 옵션 12B = 1,238B).
 - 처음에 보내는 양(초기 cwnd)도 10개가 아닙니다. CDN은 20~30개 이상인 경우가 흔합니다.
 - TLS 응답, 앞 단계에서 이미 늘어난 cwnd, CDN MISS, 서버 대기가 섞입니다.
 
@@ -198,6 +198,7 @@ docs/verification.md  검증 기록
 pip install dpkt
 python tests/test_real_rounds.py                                   # 실측 라운드 값으로 판정 규칙 확인
 python tests/test_budget.py                                        # 합성 회차로 예산 보고 규칙 확인
+python tests/test_payload.py                                       # 헤더에서 읽은 옵션 길이로 세그먼트당 데이터 확인
 python tests/run_cases.py skills/rtt-measure/scripts/analyze.py    # 합성 캡처 6종의 판정 결과 출력
 ```
 
