@@ -2,13 +2,13 @@
 """패킷 캡처(pcap/pcapng)에서 대상 HTTPS 연결 하나를 골라 RTT 계산에 필요한 값을 뽑는다.
 
 출력(JSON):
-  rtt_ms, mss(협상값), payload_per_segment(실제 한 세그먼트에 실리는 데이터), tls_server_segments,
+  rtt_ms, mss(협상값), payload_per_segment(MSS − 서버 데이터 세그먼트에서 읽은 TCP 옵션 길이), tls_server_segments,
   handshake_rtt(첫 요청까지 걸린 RTT 수), stages[각 요청 단계의 라운드별 세그먼트 수, 대기, 대역폭 제한 여부]
 
 사용: analyze.py run-1.pcap --host example.com
       analyze.py capture.pcap --host example.com --window rtt-runs/run-1.json   # 수동 캡처 파일에서 그 회차 구간만
 """
-import argparse, json, socket, struct, sys
+import argparse, collections, json, socket, struct, sys
 import dpkt
 
 REQUEST_MIN_PAYLOAD = 60      # 이보다 작은 클라이언트 데이터는 HTTP/2 제어 프레임(SETTINGS ACK, WINDOW_UPDATE)으로 본다
@@ -263,6 +263,13 @@ def payload_len(ip, tcp):
     return max(0, ip.plen - tcp.off * 4)
 
 
+def data_option_bytes(pkts):
+    """서버 데이터 세그먼트에 실제로 붙은 TCP 옵션 길이(가장 흔한 값). 데이터가 없으면 None.
+    MSS는 TCP 기본 헤더(20B)만 뺀 값이라, 세그먼트마다 붙는 옵션(timestamp 12B 등)만큼 데이터가 줄어든다."""
+    lens = collections.Counter(t.off * 4 - 20 for _, d, t in pkts if d == 's2c' and t.plen > 0)
+    return lens.most_common(1)[0][0] if lens else None
+
+
 def collect_flows(path, window=None):
     flows = {}
     for ts, ip in ip_packets(path):
@@ -342,7 +349,13 @@ def analyze(path, host=None, server_ip=None, client_port=None, window=None):
     rtt_ms = rtt * 1000
     ts_opt = opts.get('timestamp') and client_opts.get('timestamp')
     mss = min(opts.get('mss', 1460), client_opts.get('mss', 65535))
-    payload = mss - (12 if ts_opt else 0)
+    # 세그먼트당 데이터 = MSS − 서버 데이터 세그먼트에 실제로 붙은 옵션 길이(캡처한 헤더에서 읽음).
+    # 데이터 세그먼트가 없을 때만 협상값으로 추정(timestamp 협상 시 12B).
+    opt_bytes = data_option_bytes(pkts)
+    payload_source = 'header' if opt_bytes is not None else 'negotiated'
+    if opt_bytes is None:
+        opt_bytes = 12 if ts_opt else 0
+    payload = mss - opt_bytes
 
     # 재전송 제거: 같은 seq의 데이터는 처음 것만
     def data_of(direction):
@@ -503,6 +516,8 @@ def analyze(path, host=None, server_ip=None, client_port=None, window=None):
         'rtt_samples': len(samples),
         'mss': mss,
         'tcp_timestamps': bool(ts_opt),
+        'tcp_option_bytes': opt_bytes,          # 서버 데이터 세그먼트의 TCP 옵션 길이
+        'payload_source': payload_source,       # header: 캡처한 헤더에서 읽음 / negotiated: 협상값으로 추정
         'payload_per_segment': payload,
         'tls_server_segments': tls_segments,
         'init_cwnd_lower_bound': iw,      # 관측한 라운드로 구한 초기 cwnd 하한(최소 10)
